@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>远程心电使用情况统计</title>
+</head>
+<body>
+<form style="margin-left:30px;">
+	<h2>远程心电使用情况统计</h2><br /><br />
+	统计最近月数:<br />	<input type="number" 	id="lastMonths" min="1" max="12" value="3" /><br /><br />
+	报表标题:<br />		<input type="text" 	 	id="title" value="镇赉远程心电使用情况记录" /><br /><br />
+	服务器地址:<br />	<input type="text"   	id="host" value="//106.3.133.115:10000" /><br /><br />
+	管理员帐号:<br />	<input type="text"   	id="account" value="" /><br /><br />
+	管理员密码:<br />	<input type="password"	id="password" value="" /><br /><br />
+	标签:<br />			<input type="text"		id="tarTag" value="mKbCOpXztUk" /><br /><br />
+	<br />				<input type="button" value="开始统计!" onclick="javascript:doStat();" />
+</form>
+<span id='msg' style="display:block;widht:200px;margin-top:80px;text-align:center;"></span>
+<script src="//cdn.bootcss.com/template_js/0.7.1/template.min.js"></script>
+<script src="//cdn.bootcss.com/jquery/1.12.2/jquery.min.js"></script>
+<script type="text/javascript">
+Date.prototype.format = function (format) {
+    var date = {'M+': this.getMonth() + 1,'d+': this.getDate(),'h+': this.getHours(),'m+': this.getMinutes(),'s+': this.getSeconds(),'q+': Math.floor((this.getMonth() + 3) / 3),'S+': this.getMilliseconds()};
+    if (/(y+)/i.test(format)) format = format.replace(RegExp.$1, (this.getFullYear() + '').substr(4 - RegExp.$1.length));
+    for (var k in date) if (new RegExp("(" + k + ")").test(format)) format = format.replace(RegExp.$1, RegExp.$1.length == 1? date[k] : ("00" + date[k]).substr(("" + date[k]).length));
+    return format;
+}
+Date.prototype.addDays = function (days) {return new Date(this.getTime() + 24*60*60*1000*days);}
+Date.prototype.weekDays = function (days) {	return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][this.getDay()]; }
+function daysOfMonth(year,month){return [0,31,leapYear(year)?29:28,31,30,31,30,31,31,30,31,30,31][month];/*1,3,5,7,8,10,12//有31天;4,6,9,11//有30天;2//闰年29天,平年28天*/}
+function leapYear(year){return 0==year%4&&0==year%100||0==year%400;}
+
+$(function(){});
+var parts=[];
+function doStat(){
+	$('form').hide();
+	var lastMonths	=parseInt($('#lastMonths').val());
+	var title  		=$('#title').val();
+	var host  		=$('#host').val();
+	var account 	=$('#account').val();
+	var password	=$('#password').val();
+	var tarTag		=$('#tarTag').val();
+	var apis={
+		  tmpl:function(			callback,params){$.get('template.html?'+new Date().getSeconds(),function(resp){
+				callback(resp,params);
+			});
+		},auth:function(acc,pas,	callback,params){$.post(host+'/api/Auth', {"LoginName":acc,"Password":pas},function(resp){
+				if(resp.Status!='OK')prompt('\u53d1\u751f\u9519\u8bef\u003a',resp.Error);//throw resp.Error;
+				callback(resp.data,params);
+			});
+		},ents:function(			callback,params){$.post(host+'/api/IntegrativeStatistics/MgrGetIntegrativeStatisticsList?accessKey='+accessKey, {"loginName": "","userName": "","tagUnique": tarTag,"statDateType": 3,"statDateFrom": "",  "statDateTo": "","ecgSchemeCode": "","dcgSchemeCode": "","mechanism": "","userGroup": -1,"serviceMode": -1,"remainNr": -1,"customerSourceType": -1,"customerSource": "","customerManager": "","pageIndex":0,"pageSize":100, },function(resp){
+				if(resp.Status!='OK')prompt('\u53d1\u751f\u9519\u8bef\u003a',resp.Error);//throw resp.Error;
+				callback(resp.data,params);
+			});
+		},stat:function(sdf,sdt,ln,	callback,params){$.post(host+'/api/IntegrativeStatistics/MgrGetIntegrativeStatisticsSummary?accessKey='+accessKey, {"loginName": ln, "userName": "","tagUnique": tarTag,"statDateType": 3,"statDateFrom": sdf,"statDateTo": sdt,"ecgSchemeCode": "","dcgSchemeCode": "","mechanism": "","userGroup": -1,"serviceMode": -1,"remainNr": -1,"customerSourceType": -1,"customerSource": "","customerManager": "" },function(resp){
+				if(resp.Status!='OK')prompt('\u53d1\u751f\u9519\u8bef\u003a',resp.Error);//throw resp.Error;
+				callback(resp.data[0],params);
+			});
+		}
+	};
+	var st=new Date();
+	var lastMonday=st;
+	for(var i=0;i<7;i++)if('Monday'===lastMonday.addDays(-i).weekDays()){lastMonday=lastMonday.addDays(-i);break;}
+	parts.push({index:parts.length,title:'\u672c\u5468',st:lastMonday.format('yyyy-MM-dd'),ed:st.format('yyyy-MM-dd')});
+	var ed=st.addDays(-new Date().getDate()+1);
+	parts.push({index:parts.length,title:'\u672c\u6708',st:ed.format('yyyy-MM-dd'),ed:st.format('yyyy-MM-dd')});
+	st=ed.addDays(-1);
+	for(var j=0;j<lastMonths;j++){
+		st=ed.addDays(-1);
+		for(var i=0;i<31;i++)if(1==st.addDays(-i).getDate()){ed=st.addDays(-i);break;}
+		parts.push({index:parts.length,title:(1+ed.getMonth())+'\u6708('+ed.format('MM-dd')+' ~ '+st.format('MM-dd')+')',st:ed.format('yyyy-MM-dd'),ed:st.format('yyyy-MM-dd')});
+	}
+	parts.push({index:parts.length,title:'\u7d2f\u8ba1',st:'',ed:''	});
+	var datas={docTitle:title,sums:[],mechanisms:[]};
+	var html='';
+	var accessKey='';
+	var ents=[];
+	var stepI=0;
+	var stepJ=0;
+	var infos=['\u52a0\u8f7d\u6a21\u677f','\u9274\u6743','\u83b7\u53d6\u673a\u6784\u5217\u8868','\u83b7\u53d6\u6c47\u603b\u6570\u636e','\u6574\u7406\u6570\u636e','\u6784\u9020\u6a21\u578b','\u83b7\u53d6\u673a\u6784\u6570\u636e,','\u6e32\u67d3\u9875\u9762'];
+	var tasks=[
+		  function(result){apis.tmpl(								  						function(resp){html=resp;result(false);});
+		},function(result){apis.auth(account,password,										function(resp){accessKey=resp.accessKey;result(false);});
+		},function(result){apis.ents(								  						function(resp){ents=resp;result(false);})
+		},function(result){apis.stat(parts[stepI].st,parts[stepI].ed,ents[stepI].loginName,	function(resp,part){
+				datas.sums.push({'index':part.index,'sum':part.title,'thingsNums':resp.thingsNums,'diagnosisNums':resp.diagnosisNums,'DCGDiagnosisNums':resp.DCGDiagnosisNums});
+				stepI++;
+				result(stepI<parts.length, stepI+'/'+parts.length );
+			},parts[stepI]);
+		},function(result){
+			var sums=[];
+			while(datas.sums.length>sums.length){
+				for(var i=0;i<datas.sums.length;i++)if(datas.sums[i].index==sums.length){sums.push(datas.sums[i]);break;}
+			}
+			datas.sums =sums.reverse();
+			result(false);
+			stepI=0;
+		},function(result){
+			datas.mechanisms.push({'mechanism':ents[stepI].mechanism,sums:[]});
+			stepI++;
+			if(result(stepI<ents.length,  stepI+'/'+ents.length ))return;
+			stepI=0;stepJ=0;
+		},function(result){apis.stat(parts[stepJ].st,parts[stepJ].ed,ents[stepI].loginName,	function(resp){
+				datas.mechanisms[stepI].sums[stepJ]=({'index':stepJ,'sum':parts[stepJ].title,'thingsNums':resp.thingsNums,'diagnosisNums':resp.diagnosisNums,'DCGDiagnosisNums':resp.DCGDiagnosisNums});
+				stepJ++;
+				if(1+stepJ>parts.length){
+					datas.mechanisms[stepI].sums=datas.mechanisms[stepI].sums.reverse();
+					stepJ=0;stepI++;
+				}
+				result(stepI<ents.length,   '\u6b63\u5728\u5904\u7406\u673a\u6784 '+stepI+', \u5171'+ents.length + '<br />\u6b63\u5728\u8fdb\u884c\u7edf\u8ba1\u9879\u003a('+(1+stepJ)+'/'+parts.length+')' );
+			});
+		},function(result){$('body').html(template(html,datas));
+		}
+	];
+	var countTask=tasks.length;
+	function doTask(){
+		if(tasks.length<1)return;
+		var curTaskIndex=countTask-tasks.length;
+		let result=function(conti,ext){
+			ext=ext||'';
+			if(!conti)tasks.shift();
+			setTimeout(function(){doTask();},100);
+			$('#msg').html('\u6b63\u5728\u6267\u884c\u6b65\u9aa4 '+(1+curTaskIndex)+', \u5171 '+countTask+'\u6b65 <br />'+infos[curTaskIndex]+ext+'');
+			return conti;
+		}
+		tasks[0](result);
+	}
+	doTask();
+}
+</script>
+</body>
+</html>
